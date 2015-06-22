@@ -18,14 +18,14 @@
         <script src="js/libs.js"></script>
     </head>
 
-    <body>
+    <body class="ui-responsive-panel">
         <div id="header" data-theme="b" data-role="header" data-position="fixed" data-tap-toggle="false">
             <h3 class="logo"></h3>
         </div>
 
         <div data-role="page" id="loadingPage"></div>
 
-        <div data-role="panel" id="sprinklers-settings" data-position-fixed="true" data-theme="b" class="hidden">
+        <div data-role="panel" id="sprinklers-settings" data-position-fixed="true" data-theme="b" class="hidden" data-dismissible="false">
             <ul data-role="listview" data-theme="b">
                 <li class="multiSite">
                     <select data-mini="true" id="site-selector"></select>
