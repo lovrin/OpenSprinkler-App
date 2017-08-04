@@ -76,6 +76,7 @@
         }
     },
     "dependencies": {
-        "node-static": "^0.7.9"
+        "node-static": "^0.7.9",
+        "supervisor": "^0.12.0"
     }
 }
