@@ -209,6 +209,11 @@ ul.tabs li.current {
     background:none!important;
     height:25px
 }
+hr.divider {
+    width: 60%;
+    opacity: 0.2;
+    margin: 15px auto;
+}
 .content-divider {
     border: 0;
     height: 0;
@@ -718,7 +723,7 @@ body, input, select, textarea, button, .ui-btn {
     font-weight:400;
     font-size:medium;
     width: 100%;
-    min-height: 24px;
+	min-height: 24px;
     padding: 2px 0;
 }
 #footer-menu {
@@ -1220,4 +1225,13 @@ div.running-text{
     .home-info {
         margin-left: -25px;
     }
+}
+
+/* iPhone X rules */
+#footer-running {
+	padding: 0 2px env(safe-area-inset-bottom) 2px;
+}
+
+#footer-menu {
+	bottom: calc(env(safe-area-inset-bottom) + 10%) !important;
 }
