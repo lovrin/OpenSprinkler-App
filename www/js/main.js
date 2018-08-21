@@ -648,7 +648,7 @@ function sendToOS( dest, type ) {
 		queue = isChange ? "change" : "default",
 
         // Use POST when sending data to the controller (requires firmware 2.1.8 or newer)
-        usePOST = ( isChange && checkOSVersion( 218 ) ),
+        usePOST = ( isChange && checkOSVersion( 300 ) ),
         obj = {
             url: currPrefix + currIp + ( usePOST ? dest.split( "?" )[ 0 ] : dest ),
             type: usePOST ? "POST" : "GET",
@@ -840,7 +840,10 @@ function newLoad() {
 	        }
 
             // Check if a firmware update is available
-            checkFirmwareUpdate();
+			checkFirmwareUpdate();
+
+			// Check for unused expansion boards
+			detectUnusedExpansionBoards();
 
             // Check if password is plain text (older method) and hash the password, if needed
             if ( checkOSVersion( 213 ) && controller.options.hwv !== 255 ) {
@@ -2061,8 +2064,8 @@ function updateDeviceIP( finishCheck ) {
         try {
 
             // Request the device's IP address
-            networkinterface.getIPAddress( function( data ) {
-                ip = data;
+            networkinterface.getWiFiIPAddress( function( data ) {
+                ip = data.ip;
                 finish( ip );
             } );
         } catch ( err ) {
@@ -2310,8 +2313,9 @@ function showZimmermanAdjustmentOptions( button, callback ) {
             bh: 30,
             bt: 70,
             br: 0
-        }, controller.settings.wto ),
-        isMetric = ( weather.forecast.region === "US" || weather.forecast.region === "BM" || weather.forecast.region === "PW" ) ? false : true,
+		}, controller.settings.wto ),
+		region = weather ? weather.forecast.region : navigator.language.split( "-" )[ 1 ],
+        isMetric = ( region === "US" || region === "BM" || region === "PW" ) ? false : true,
 
 		// Enable Zimmerman extension to set weather conditions as baseline for adjustment
         hasBaseline = checkOSVersion( 2162 );
@@ -2648,65 +2652,44 @@ function updateYahooWeather( string ) {
 		return;
 	}
 
-    $.ajax( {
-        url: "https://query.yahooapis.com/v1/public/yql?q=select%20woeid%20from%20geo.placefinder%20where%20text=%22" +
-			encodeURIComponent( string || controller.settings.loc ) + "%22&format=json",
-        dataType: isChromeApp || isWinApp ? "json" : "jsonp",
-        contentType: "application/json; charset=utf-8",
-        shouldRetry: retryCount,
-        success: function( woeid ) {
-            if ( typeof woeid !== "object" || typeof woeid.query !== "object" || woeid.query.results === null ) {
-                hideWeather();
-                return;
-            }
+	$.ajax( {
+		url: "https://query.yahooapis.com/v1/public/yql?q=select%20item,title,location%20from%20weather.forecast%20where%20woeid%20in%20(select%20woeid%20from%20geo.places(1)%20where%20text%3D%22" +
+			encodeURIComponent( string || controller.settings.loc ) +
+			"%22)&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys",
+		dataType: isChromeApp || isWinApp ? "json" : "jsonp",
+		contentType: "application/json; charset=utf-8",
+		shouldRetry: retryCount,
+		success: function( data ) {
 
-            var wid;
+			// Hide the weather if no data is returned
+			if ( data.query.results.channel.item.title === "City not found" ) {
+				hideWeather();
+				return;
+			}
+			var now = data.query.results.channel.item.condition,
+				title = data.query.results.channel.title,
+				loc = /Yahoo! Weather - (.*)/.exec( title ),
+				region = data.query.results.channel.location.country;
 
-            if ( typeof woeid.query.results.Result.woeid === "string" ) {
-                wid = woeid.query.results.Result.woeid;
-            } else if ( Array.isArray( woeid.query.results.Result ) ) {
-                wid = woeid.query.results.Result[ 0 ].woeid;
-            }
+			currentCoordinates = [ data.query.results.channel.item.lat, data.query.results.channel.item.long ];
 
-            $.ajax( {
-                url: "https://query.yahooapis.com/v1/public/yql?q=select%20item%2Ctitle%2Clocation%20from%20weather.forecast%20where%20woeid%3D%22" +
-					wid + "%22&format=json",
-                dataType: isChromeApp || isWinApp ? "json" : "jsonp",
-                contentType: "application/json; charset=utf-8",
-                shouldRetry: retryCount,
-                success: function( data ) {
+			weather = {
+				title: now.text,
+				code: now.code,
+				temp: convertTemp( now.temp, region ),
+				location: loc[ 1 ],
+				forecast: data.query.results.channel.item.forecast,
+				region: region,
+				source: "yahoo"
+			};
 
-                    // Hide the weather if no data is returned
-                    if ( data.query.results.channel.item.title === "City not found" ) {
-                        hideWeather();
-                        return;
-                    }
-                    var now = data.query.results.channel.item.condition,
-                        title = data.query.results.channel.title,
-                        loc = /Yahoo! Weather - (.*)/.exec( title ),
-                        region = data.query.results.channel.location.country;
+			isWUDataValid = false;
 
-                    currentCoordinates = [ data.query.results.channel.item.lat, data.query.results.channel.item.long ];
+			updateWeatherBox();
 
-                    weather = {
-                        title: now.text,
-                        code: now.code,
-                        temp: convertTemp( now.temp, region ),
-                        location: loc[ 1 ],
-                        forecast: data.query.results.channel.item.forecast,
-                        region: region,
-                        source: "yahoo"
-                    };
-
-                    isWUDataValid = false;
-
-                    updateWeatherBox();
-
-                    $.mobile.document.trigger( "weatherUpdateComplete" );
-                }
-            } );
-        }
-    } );
+			$.mobile.document.trigger( "weatherUpdateComplete" );
+		}
+	} );
 }
 
 function updateWeatherBox() {
@@ -3231,59 +3214,43 @@ function overlayMap( callback ) {
 }
 
 function debugWU() {
-    if ( typeof controller.settings.wtkey !== "string" || controller.settings.wtkey === "" ) {
-        showerror( _( "An API key must be provided for Weather Underground" ) );
-        return;
-    }
-
     $.mobile.loading( "show" );
 
     $.ajax( {
         url: "https://api.wunderground.com/api/" + controller.settings.wtkey + "/yesterday/conditions/q/" + controller.settings.loc + ".json",
         dataType: isChromeApp || isWinApp ? "json" : "jsonp",
         shouldRetry: retryCount
-    } ).done( function( data ) {
-        $.mobile.loading( "hide" );
+    } ).always( function( data ) {
+		$.mobile.loading( "hide" );
 
-        if ( typeof data.response.error === "object" ) {
-            showerror( _( "An invalid API key has been detected" ) );
-            return;
-        }
+		var popup = "<div data-role='popup' id='debugWU' class='ui-content ui-page-theme-a'><table class='debugWU'>";
 
-        if ( typeof data.history === "object" && typeof data.history.dailysummary === "object" ) {
-            var summary = data.history.dailysummary[ 0 ],
-				current = data.current_observation;
+		if (
+			typeof data.response.error !== "object" &&
+			typeof data.history === "object" &&
+			typeof data.history.dailysummary === "object" &&
+			validateWUValues( [ "minhumidity", "maxhumidity", "meantempm", "meantempi", "precipm", "precipi" ], data.history.dailysummary[ 0 ] ) &&
+			validateWUValues( [ "precip_today_metric", "precip_today_in" ], data.current_observation )
+		) {
 
-            if ( !validateWUValues( [ "minhumidity", "maxhumidity", "meantempm", "meantempi", "precipm", "precipi" ], summary ) ||
-					!validateWUValues( [ "precip_today_metric", "precip_today_in" ], current ) ) {
-				showerror( _( "Weather data cannot be found for your location" ) );
-				return;
-            }
+            var country = data.current_observation.display_location.country_iso3166,
+				isMetric = ( ( country === "US" || country === "BM" || country === "PW" ) ? false : true );
 
-            var country = current.display_location.country_iso3166,
-                isMetric = ( ( country === "US" || country === "BM" || country === "PW" ) ? false : true ),
-                popup = $( "<div data-role='popup' id='debugWU' class='ui-content ui-page-theme-a'>" +
-                    "<table class='debugWU'>" +
-                        "<tr><td>" + _( "Min Humidity" ) + "</td><td>" + summary.minhumidity + "%</td></tr>" +
-                        "<tr><td>" + _( "Max Humidity" ) + "</td><td>" + summary.maxhumidity + "%</td></tr>" +
-                        "<tr><td>" + _( "Mean Temp" ) + "</td><td>" + ( isMetric ? summary.meantempm + "&#176;C" : summary.meantempi + "&#176;F" ) + "</td></tr>" +
-                        "<tr><td>" + _( "Precip Yesterday" ) + "</td><td>" + ( isMetric ? summary.precipm + "mm" : summary.precipi + "\"" ) + "</td></tr>" +
-                        "<tr><td>" + _( "Precip Today" ) + "</td><td>" + ( isMetric ? current.precip_today_metric + "mm" : current.precip_today_in + "\"" ) + "</td></tr>" +
-                        "<tr><td>" + _( "Adjustment Method" ) + "</td><td>" + getAdjustmentName( controller.options.uwt ) + "</td></tr>" +
-                        "<tr><td>" + _( "Current % Watering" ) + "</td><td>" + controller.options.wl + "%</td></tr>" +
-                        ( typeof controller.settings.lwc === "number" ? "<tr><td>" + _( "Last Weather Call" ) + "</td><td>" + dateToString( new Date( controller.settings.lwc * 1000 ) ) + "</td></tr>" : "" ) +
-                        ( typeof controller.settings.lswc === "number" ? "<tr><td>" + _( "Last Successful Weather Call" ) + "</td><td>" + dateToString( new Date( controller.settings.lswc * 1000 ) ) + "</td></tr>" : "" ) +
-                    "</table>" +
-                "</div>" );
+			popup += "<tr><td>" + _( "Min Humidity" ) + "</td><td>" + data.history.dailysummary[ 0 ].minhumidity + "%</td></tr>" +
+				"<tr><td>" + _( "Max Humidity" ) + "</td><td>" + data.history.dailysummary[ 0 ].maxhumidity + "%</td></tr>" +
+				"<tr><td>" + _( "Mean Temp" ) + "</td><td>" + ( isMetric ? data.history.dailysummary[ 0 ].meantempm + "&#176;C" : data.history.dailysummary[ 0 ].meantempi + "&#176;F" ) + "</td></tr>" +
+				"<tr><td>" + _( "Precip Yesterday" ) + "</td><td>" + ( isMetric ? data.history.dailysummary[ 0 ].precipm + "mm" : data.history.dailysummary[ 0 ].precipi + "\"" ) + "</td></tr>" +
+				"<tr><td>" + _( "Precip Today" ) + "</td><td>" + ( isMetric ? data.current_observation.precip_today_metric + "mm" : data.current_observation.precip_today_in + "\"" ) + "</td></tr>" +
+				"<tr><td>" + _( "Adjustment Method" ) + "</td><td>" + getAdjustmentName( controller.options.uwt ) + "</td></tr>" +
+				"<tr><td>" + _( "Current % Watering" ) + "</td><td>" + controller.options.wl + "%</td></tr>";
+		}
 
-            openPopup( popup );
-        } else {
-            showerror( _( "Weather data cannot be found for your location" ) );
-            return;
-        }
-    } ).fail( function() {
-        $.mobile.loading( "hide" );
-        showerror( _( "Connection timed-out. Please try again." ) );
+		popup += ( typeof controller.settings.lwc === "number" ? "<tr><td>" + _( "Last Weather Call" ) + "</td><td>" + dateToString( new Date( controller.settings.lwc * 1000 ) ) + "</td></tr>" : "" ) +
+				 ( typeof controller.settings.lswc === "number" ? "<tr><td>" + _( "Last Successful Weather Call" ) + "</td><td>" + dateToString( new Date( controller.settings.lswc * 1000 ) ) + "</td></tr>" : "" ) +
+				 ( typeof controller.settings.lupt === "number" ? "<tr><td>" + _( "Last System Reboot" ) + "</td><td>" + dateToString( new Date( controller.settings.lupt * 1000 ) ) + "</td></tr>" : "" ) +
+				 "</table></div>";
+
+		openPopup( $( popup ) );
     } );
 
     return false;
@@ -3677,12 +3644,6 @@ function showOptions( expandItem ) {
                         }
                         return true;
                     case "o31":
-                        if ( data > 0 && $( "#wtkey" ).val() === "" ) {
-                            showerror( _( "Weather Underground API key is required for weather-based control" ) );
-                            invalid = true;
-                            return false;
-                        }
-
                         var restrict = page.find( "#weatherRestriction" );
                         if ( restrict.length ) {
                             data = setRestriction( parseInt( restrict.val() ), data );
@@ -3916,38 +3877,12 @@ function showOptions( expandItem ) {
 		( typeof expandItem === "string" && expandItem === "weather" ? " data-collapsed='false'" : "" ) + ">" +
 		"<legend>" + _( "Weather and Sensors" ) + "</legend>";
 
-    if ( typeof controller.settings.wtkey !== "undefined" ) {
-        list += "<div class='ui-field-contain'><label for='wtkey'>" + _( "Wunderground Key" ).replace( "Wunderground", "Wunder&shy;ground" ) +
-	        "<button data-helptext='" +
-				_( "Weather Underground requires an API Key which can be obtained from " ) +
-				"' class='help-icon btn-no-border ui-btn ui-icon-info ui-btn-icon-notext'></button>" +
-		"</label>" +
-        "<table>" +
-            "<tr style='width:100%;vertical-align: top;'>" +
-                "<td style='width:100%'>" +
-                    "<div class='" +
-						( weatherKeyFail === true ? "red " : ( ( controller.settings.wtkey && controller.settings.wtkey !== "" ) ? "green " : "" ) ) +
-						"ui-input-text controlgroup-textinput ui-btn ui-body-inherit ui-corner-all ui-mini ui-shadow-inset ui-input-has-clear'>" +
-							"<input data-role='none' data-mini='true' autocomplete='off' autocorrect='off' autocapitalize='off' spellcheck='false' " +
-								"type='text' id='wtkey' value='" + controller.settings.wtkey + "'>" +
-							"<a href='#' tabindex='-1' aria-hidden='true' data-helptext='" + _( "An invalid API key has been detected." ) +
-								"' class='" + ( weatherKeyFail === true ? "" : "hidden " ) +
-								"help-icon ui-input-clear ui-btn ui-icon-alert ui-btn-icon-notext ui-corner-all'>" +
-							"</a>" +
-                    "</div>" +
-                "</td>" +
-                "<td><button class='noselect' data-mini='true' id='verify-api'>" + _( "Verify" ) + "</button></td>" +
-            "</tr>" +
-        "</table></div>";
-    }
-
     if ( typeof controller.options.uwt !== "undefined" ) {
         list += "<div class='ui-field-contain'><label for='o31' class='select'>" + _( "Weather Adjustment Method" ) +
 				"<button data-helptext='" +
 					_( "Weather adjustment uses Weather Underground data in conjunction with the selected method to adjust the watering percentage." ) +
 					"' class='help-icon btn-no-border ui-btn ui-icon-info ui-btn-icon-notext'></button>" +
-			"</label><select " + ( controller.settings.wtkey && controller.settings.wtkey !== "" ? "" : "disabled='disabled' " ) +
-				"data-mini='true' id='o31'>";
+			"</label><select data-mini='true' id='o31'>";
         for ( i = 0; i < getAdjustmentName( "length" ); i++ ) {
             list += "<option " + ( ( i === getAdjustmentMethod() ) ? "selected" : "" ) + " value='" + i + "'>" + getAdjustmentName( i ) + "</option>";
         }
@@ -3965,8 +3900,7 @@ function showOptions( expandItem ) {
 					"<button data-helptext='" + _( "Prevents watering when the selected restriction is met." ) +
 						"' class='help-icon btn-no-border ui-btn ui-icon-info ui-btn-icon-notext'></button>" +
 				"</label>" +
-				"<select " + ( controller.settings.wtkey && controller.settings.wtkey !== "" ? "" : "disabled='disabled' " ) +
-					"data-mini='true' class='noselect' id='weatherRestriction'>";
+				"<select data-mini='true' class='noselect' id='weatherRestriction'>";
 
             for ( i = 0; i < 2; i++ ) {
                 var restrict = getRestriction( i );
@@ -4078,6 +4012,31 @@ function showOptions( expandItem ) {
 		( typeof expandItem === "string" && expandItem === "advanced" ? " data-collapsed='false'" : "" ) + ">" +
 		"<legend>" + _( "Advanced" ) + "</legend>";
 
+	if ( typeof controller.options.uwt !== "undefined" && typeof controller.settings.wtkey !== "undefined" ) {
+		list += "<div class='ui-field-contain'><label for='wtkey'>" + _( "Wunderground Key" ).replace( "Wunderground", "Wunder&shy;ground" ) +
+			"<button data-helptext='" +
+				_( "We use OpenWeatherMap normally however with a user provided API key the weather source will switch to Weather Underground." ) +
+				"' class='help-icon btn-no-border ui-btn ui-icon-info ui-btn-icon-notext'></button>" +
+		"</label>" +
+		"<table>" +
+			"<tr style='width:100%;vertical-align: top;'>" +
+				"<td style='width:100%'>" +
+					"<div class='" +
+						( weatherKeyFail === true ? "red " : ( ( controller.settings.wtkey && controller.settings.wtkey !== "" ) ? "green " : "" ) ) +
+						"ui-input-text controlgroup-textinput ui-btn ui-body-inherit ui-corner-all ui-mini ui-shadow-inset ui-input-has-clear'>" +
+							"<input data-role='none' data-mini='true' autocomplete='off' autocorrect='off' autocapitalize='off' spellcheck='false' " +
+								"type='text' id='wtkey' value='" + controller.settings.wtkey + "'>" +
+							"<a href='#' tabindex='-1' aria-hidden='true' data-helptext='" + _( "An invalid API key has been detected." ) +
+								"' class='" + ( weatherKeyFail === true ? "" : "hidden " ) +
+								"help-icon ui-input-clear ui-btn ui-icon-alert ui-btn-icon-notext ui-corner-all'>" +
+							"</a>" +
+					"</div>" +
+				"</td>" +
+				"<td><button class='noselect' data-mini='true' id='verify-api'>" + _( "Verify" ) + "</button></td>" +
+			"</tr>" +
+		"</table></div>";
+	}
+
     if ( typeof controller.options.hp0 !== "undefined" ) {
         list += "<div class='ui-field-contain'><label for='o12'>" + _( "HTTP Port (restart required)" ) + "</label>" +
 			"<input data-mini='true' type='number' pattern='[0-9]*' id='o12' value='" + ( controller.options.hp1 * 256 + controller.options.hp0 ) + "'>" +
@@ -4157,8 +4116,13 @@ function showOptions( expandItem ) {
 		( typeof expandItem === "string" && expandItem === "reset" ? " data-collapsed='false'" : "" ) + ">" +
 		"<legend>" + _( "Reset" ) + "</legend>";
 
+    list += "<button data-mini='true' class='center-div reset-log'>" + _( "Clear Log Data" ) + "</button>";
     list += "<button data-mini='true' class='center-div reset-options'>" + _( "Reset All Options" ) + "</button>";
-    list += "<button data-mini='true' class='center-div reset-stations'>" + _( "Reset All Station Data" ) + "</button>";
+	list += "<button data-mini='true' class='center-div reset-stations'>" + _( "Reset All Station Data" ) + "</button>";
+
+	if ( getHWVersion() === "3.0" ) {
+		list += "<hr class='divider'><button data-mini='true' class='center-div reset-wireless'>" + _( "Reset Wireless Settings" ) + "</button>";
+	}
 
     list += "</fieldset>";
 
@@ -4248,6 +4212,8 @@ function showOptions( expandItem ) {
 		}
     } );
 
+    page.find( ".reset-log" ).on( "click", clearLogs );
+
     page.find( ".reset-options" ).on( "click", function() {
         areYouSure( _( "Are you sure you want to delete all settings and return to the default settings?" ), "", function() {
             var co;
@@ -4320,6 +4286,17 @@ function showOptions( expandItem ) {
             sendToOS( "/cs?pw=&" + cs ).done( function() {
                 showerror( _( "Stations have been updated" ) );
                 updateController();
+            } );
+        } );
+	} );
+
+	page.find( ".reset-wireless" ).on( "click", function() {
+        areYouSure( _( "Are you sure you want to reset the wireless settings?" ), _( "This will delete the stored SSID/password for your wireless network and return the device to access point mode" ), function() {
+            sendToOS( "/cv?pw=&ap=1" ).done( function() {
+                $.mobile.document.one( "pageshow", function() {
+                    showerror( _( "Wireless settings have been reset. Please follow the OpenSprinkler user manual on restoring connectivity." ) );
+                } );
+                goBack();
             } );
         } );
     } );
@@ -4510,10 +4487,7 @@ function showOptions( expandItem ) {
         // Switch state of weather algorithm input based on API key status
         if ( this.value === "" ) {
 	        page.find( "#wto" ).parents( ".ui-field-contain" ).toggleClass( "hidden", true );
-            page.find( "#o31,#weatherRestriction" ).val( "0" ).selectmenu( "refresh" ).selectmenu( "disable" );
             page.find( "#o23" ).prop( "disabled", false );
-        } else {
-            page.find( "#o31,#weatherRestriction" ).selectmenu( "enable" );
         }
     } );
 
@@ -7746,14 +7720,7 @@ var getLogs = ( function() {
 
     // Bind clear logs button
     page.find( ".clear_logs" ).on( "click", function() {
-        areYouSure( _( "Are you sure you want to clear ALL your log data?" ), "", function() {
-            var url = isOSPi() ? "/cl?pw=" : "/dl?pw=&day=all";
-            $.mobile.loading( "show" );
-            sendToOS( url ).done( function() {
-                requestData();
-                showerror( _( "Logs have been cleared" ) );
-            } );
-        } );
+        clearLogs( requestData );
         return false;
     } );
 
@@ -7820,6 +7787,19 @@ var getLogs = ( function() {
 
     return begin;
 } )();
+
+function clearLogs( callback ) {
+    areYouSure( _( "Are you sure you want to clear ALL your log data?" ), "", function() {
+        var url = isOSPi() ? "/cl?pw=" : "/dl?pw=&day=all";
+        $.mobile.loading( "show" );
+        sendToOS( url ).done( function() {
+            if ( typeof callback === "function" ) {
+                callback();
+            }
+            showerror( _( "Logs have been cleared" ) );
+        } );
+    } );
+}
 
 // Program management functions
 var getPrograms = ( function() {
@@ -9291,7 +9271,7 @@ function importConfig( data ) {
             } ),
             $.each( data.special, function( sid, info ) {
 				if ( checkOSVersion( 216 ) ) {
-	                sendToOS( "/cs?pw=&sid=" + sid + "&st=" + info.st + "&sd=" + info.sd );
+	                sendToOS( "/cs?pw=&sid=" + sid + "&st=" + info.st + "&sd=" + encodeURIComponent( info.sd ) );
 	            }
             } )
         ).then(
@@ -9354,7 +9334,7 @@ var showAbout = ( function() {
                     "</li>" +
                 "</ul>" +
                 "<p class='smaller'>" +
-                    _( "App Version" ) + ": 1.7.0" +
+                    _( "App Version" ) + ": 1.8.2" +
                     "<br>" + _( "Firmware" ) + ": <span class='firmware'></span>" +
                     "<br><span class='hardwareLabel'>" + _( "Hardware Version" ) + ":</span> <span class='hardware'></span>" +
                 "</p>" +
@@ -9963,6 +9943,27 @@ function getTokenUser( token ) {
     return atob( token ).split( "|" )[ 0 ];
 }
 
+function detectUnusedExpansionBoards() {
+    if (
+        typeof controller.options.dexp === "number" &&
+        controller.options.dexp < 255 &&
+        controller.options.dexp >= 0 &&
+        controller.options.ext < controller.options.dexp
+    ) {
+        addNotification( {
+            title: _( "Unused Expanders Detected" ),
+            desc: _( "Click here to enable all connected stations." ),
+            on: function() {
+                removeNotification( $( this ).parent() );
+				changePage( "#os-options", {
+					expandItem: "station"
+				} );
+				return false;
+            }
+        } );
+    }
+}
+
 function showUnifiedFirmwareNotification() {
 	if ( !isOSPi() ) {
 		return;
@@ -10244,8 +10245,8 @@ function checkFirmwareUpdate() {
                             on: function() {
 
                                 // Modify the changelog by parsing markdown of lists to HTML
-                                var button = $( this ).parent(),
-									canUpdate = controller.options.hwv > 63 && checkOSVersion( 216 ),
+								var button = $( this ).parent(),
+									canUpdate = controller.options.hwv === 30 || controller.options.hwv > 63 && checkOSVersion( 216 ),
                                     changelog = data[ 0 ][ "html_url" ],
                                     popup = $(
                                         "<div data-role='popup' class='modal' data-theme='a'>" +
@@ -10257,34 +10258,42 @@ function checkFirmwareUpdate() {
                                                 _( "View Changelog" ) +
                                             "</a>" +
                                             "<a class='guide ui-btn ui-corner-all ui-shadow' style='width:80%;margin:5px auto;' href='#'>" +
-												( canUpdate ? _( "Update Now" ) : _( "Update Guide" ) ) +
+												_( "Update Guide" ) +
 											"</a>" +
+                                            ( canUpdate ? "<a class='update ui-btn ui-corner-all ui-shadow' style='width:80%;margin:5px auto;' href='#'>" +
+												_( "Update Now" ) +
+											"</a>" : "" ) +
                                             "<a class='dismiss ui-btn ui-btn-b ui-corner-all ui-shadow' style='width:80%;margin:5px auto;' href='#'>" +
 												_( "Dismiss" ) +
 											"</a>" +
                                         "</div>"
                                     );
 
-                                popup.find( ".guide" ).on( "click", function() {
-									if ( canUpdate ) {
+                                popup.find( ".update" ).on( "click", function() {
+									if ( controller.options.hwv === 30 ) {
+										$( "<a class='hidden iab' href='" + currPrefix + currIp + "/update'></a>" ).appendTo( popup ).click();
+										return;
+									}
 
-										// For OSPi/OSBo with firmware 2.1.6 or newer, trigger the update script from the app
-										sendToOS( "/cv?pw=&update=1", "json" ).then(
-											function() {
-												showerror( _( "Update successful" ) );
-												popup.find( ".dismiss" ).click();
-											},
-											function() {
-											    $.mobile.loading( "show", {
-											        html: "<div class='center'>" + _( "Update did not complete." ) + "<br>" +
-														"<a class='iab ui-btn' href='https://openthings.freshdesk.com/support/solutions/articles/5000631599-installing-and-updating-the-unified-firmware#upgrade'>" + _( "Update Guide" ) + "</a></div>",
-											        textVisible: true,
-											        theme: "b"
-											    } );
-												setTimeout( function() { $.mobile.loading( "hide" ); }, 3000 );
-											}
-										);
-									} else {
+									// For OSPi/OSBo with firmware 2.1.6 or newer, trigger the update script from the app
+									sendToOS( "/cv?pw=&update=1", "json" ).then(
+										function() {
+											showerror( _( "Update successful" ) );
+											popup.find( ".dismiss" ).click();
+										},
+										function() {
+											$.mobile.loading( "show", {
+												html: "<div class='center'>" + _( "Update did not complete." ) + "<br>" +
+													"<a class='iab ui-btn' href='https://openthings.freshdesk.com/support/solutions/articles/5000631599-installing-and-updating-the-unified-firmware#upgrade'>" + _( "Update Guide" ) + "</a></div>",
+												textVisible: true,
+												theme: "b"
+											} );
+											setTimeout( function() { $.mobile.loading( "hide" ); }, 3000 );
+										}
+									);
+								} );
+
+								popup.find( ".guide" ).on( "click", function() {
 
 										var url = controller.options.hwv > 63 ?
 											"https://openthings.freshdesk.com/support/solutions/articles/5000631599-installing-and-updating-the-unified-firmware#upgrade"
@@ -10293,7 +10302,6 @@ function checkFirmwareUpdate() {
 	                                    // Open the firmware upgrade guide in a child browser
 	                                    $( "<a class='hidden iab' href='" + url + "'></a>" )
 											.appendTo( popup ).click();
-									}
                                 } );
 
                                 popup.find( ".dismiss" ).one( "click", function() {
@@ -11281,10 +11289,6 @@ function showHelpText( e ) {
         text = button.data( "helptext" ),
         popup;
 
-    if ( button.parent().attr( "for" ) === "wtkey" ) {
-        text += "<a class='iab' target='_blank' href='https://openthings.freshdesk.com/support/solutions/articles/5000017485-getting-a-weather-api#article-show-5000017485'>here</a>.";
-    }
-
     popup = $( "<div data-role='popup' data-theme='a'>" +
         "<p>" + text + "</p>" +
     "</div>" );
@@ -11826,20 +11830,20 @@ function languageSelect() {
     	Commented list of languages used by the string parser to identify strings for translation
 
 		{af: _("Afrikaans"), am: _("Amharic"), zh: _("Chinese"), hr: _("Croatian"), cs: _("Czech"),
-		nl: _("Dutch"), en: _("English"), pes: _("Farsi"), fr: _("French"), de: _("German"),
+		nl: _("Dutch"), en: _("English"), pes: _("Farsi"), fr: _("French"), de: _("German"), bg: _("Bulgarian"),
 		el: _("Greek"), he: _("Hebrew"), hu: _("Hungarian"), is: _("Icelandic"), it: _("Italian"), lv: _("Latvian"),
-		mn: _("Mongolian"), no: _("Norwegian"), pl: _("Polish"), pt: _("Portuguese"), ru: _("Russian"),
-		sk: _("Slovak"), sl: _("Slovenian"), es: _("Spanish"), th: _("Thai")}
+		mn: _("Mongolian"), no: _("Norwegian"), pl: _("Polish"), pt: _("Portuguese"), ru: _("Russian"), ta: _("Tamil"),
+		sk: _("Slovak"), sl: _("Slovenian"), es: _("Spanish"), th: _("Thai"), tr: _("Turkish"), sv: _("Swedish"), ro: _("Romanian")}
 	*/
 
     var popup = "<div data-role='popup' data-theme='a' id='localization' data-corners='false'>" +
                 "<ul data-inset='true' data-role='listview' id='lang' data-corners='false'>" +
                 "<li data-role='list-divider' data-theme='b' class='center' data-translate='Localization'>" + _( "Localization" ) + "</li>",
 
-        codes = { af: "Afrikaans", am: "Amharic", zh: "Chinese", hr: "Croatian", cs: "Czech", nl: "Dutch",
+        codes = { af: "Afrikaans", am: "Amharic", bg: "Bulgarian", zh: "Chinese", hr: "Croatian", cs: "Czech", nl: "Dutch",
 				en: "English", pes: "Farsi", fr: "French", de: "German", el: "Greek", he: "Hebrew", hu: "Hungarian",
 				is: "Icelandic", it: "Italian", lv: "Latvian", mn: "Mongolian", no: "Norwegian", pl: "Polish", pt: "Portuguese",
-				ru: "Russian", sk: "Slovak", sl: "Slovenian", es: "Spanish", th: "Thai" };
+				ru: "Russian", sk: "Slovak", sl: "Slovenian", es: "Spanish", ta: "Tamil", th: "Thai", tr: "Turkish", sv: "Swedish", ro: "Romanian" };
 
     $.each( codes, function( key, name ) {
         popup += "<li><a href='#' data-translate='" + name + "' data-lang-code='" + key + "'>" + _( name ) + "</a></li>";
@@ -11879,7 +11883,7 @@ function checkCurrLang() {
 }
 
 function getAppURLPath() {
-	return currLocal ? $.mobile.path.parseUrl( $( "head" ).find( "script[src$='app.jgz'],script[src$='app.js']" ).attr( "src" ) ).hrefNoHash.slice( 0, -10 ) : "";
+	return currLocal ? $.mobile.path.parseUrl( $( "head" ).find( "script[src$='app.js']" ).attr( "src" ) ).hrefNoHash.slice( 0, -9 ) : "";
 }
 
 function getUrlVars( url ) {

@@ -282,15 +282,6 @@ msgstr ""
 msgid "Attempting to retrieve your current location"
 msgstr ""
 
-msgid "An API key must be provided for Weather Underground"
-msgstr ""
-
-msgid "An invalid API key has been detected"
-msgstr ""
-
-msgid "Weather data cannot be found for your location"
-msgstr ""
-
 msgid "Min Humidity"
 msgstr ""
 
@@ -316,6 +307,9 @@ msgid "Last Weather Call"
 msgstr ""
 
 msgid "Last Successful Weather Call"
+msgstr ""
+
+msgid "Last System Reboot"
 msgstr ""
 
 msgid "Change Rain Delay"
@@ -371,6 +365,9 @@ msgstr ""
 msgid "Wunderground API Key"
 msgstr ""
 
+msgid "An API key must be provided for Weather Underground"
+msgstr ""
+
 msgid "Are you sure you want to downgrade the UI?"
 msgstr ""
 
@@ -381,9 +378,6 @@ msgid "A valid gateway address is required when DHCP is not used"
 msgstr ""
 
 msgid "A valid DNS address is required when DHCP is not used"
-msgstr ""
-
-msgid "Weather Underground API key is required for weather-based control"
 msgstr ""
 
 msgid "Settings have been saved"
@@ -449,18 +443,6 @@ msgstr ""
 msgid "Weather and Sensors"
 msgstr ""
 
-msgid "Wunderground Key"
-msgstr ""
-
-msgid "Weather Underground requires an API Key which can be obtained from "
-msgstr ""
-
-msgid "An invalid API key has been detected."
-msgstr ""
-
-msgid "Verify"
-msgstr ""
-
 msgid "Weather Adjustment Method"
 msgstr ""
 
@@ -492,15 +474,15 @@ msgstr ""
 msgid "Attached Sensor Type"
 msgstr ""
 
-msgid ""
-"When using program switch, a switch is connected to the sensor port to "
-"trigger Program 1 every time the switch is pressed for at least 1 second."
-msgstr ""
-
 msgid "Flow"
 msgstr ""
 
 msgid "Program Switch"
+msgstr ""
+
+msgid ""
+"When using program switch, a switch is connected to the sensor port to "
+"trigger Program 1 every time the switch is pressed for at least 1 second."
 msgstr ""
 
 msgid "Use Rain Sensor"
@@ -539,6 +521,20 @@ msgid "Brightness"
 msgstr ""
 
 msgid "Idle Brightness"
+msgstr ""
+
+msgid "Wunderground Key"
+msgstr ""
+
+msgid ""
+"We use OpenWeatherMap normally however with a user provided API key the "
+"weather source will switch to Weather Underground."
+msgstr ""
+
+msgid "An invalid API key has been detected."
+msgstr ""
+
+msgid "Verify"
 msgstr ""
 
 msgid "HTTP Port (restart required)"
@@ -597,10 +593,16 @@ msgstr ""
 msgid "Reset"
 msgstr ""
 
+msgid "Clear Log Data"
+msgstr ""
+
 msgid "Reset All Options"
 msgstr ""
 
 msgid "Reset All Station Data"
+msgstr ""
+
+msgid "Reset Wireless Settings"
 msgstr ""
 
 msgid "Are you sure you want to clear the current location?"
@@ -618,6 +620,19 @@ msgid "This will reset all station names and attributes"
 msgstr ""
 
 msgid "Stations have been updated"
+msgstr ""
+
+msgid "Are you sure you want to reset the wireless settings?"
+msgstr ""
+
+msgid ""
+"This will delete the stored SSID/password for your wireless network and "
+"return the device to access point mode"
+msgstr ""
+
+msgid ""
+"Wireless settings have been reset. Please follow the OpenSprinkler user "
+"manual on restoring connectivity."
 msgstr ""
 
 msgid "Seconds"
@@ -728,6 +743,14 @@ msgid "On Command"
 msgstr ""
 
 msgid "Off Command"
+msgstr ""
+
+msgid ""
+"Note: There is a limit on the number of character used to configure this "
+"station type."
+msgstr ""
+
+msgid "Characters remaining"
 msgstr ""
 
 msgid "Unable to reach the remote station."
@@ -1024,13 +1047,13 @@ msgid ""
 "The requested time span exceeds the maxiumum of 1 year and has been adjusted"
 msgstr ""
 
+msgid "Logs"
+msgstr ""
+
 msgid "Are you sure you want to clear ALL your log data?"
 msgstr ""
 
 msgid "Logs have been cleared"
-msgstr ""
-
-msgid "Logs"
 msgstr ""
 
 msgid "Do you want to save your changes?"
@@ -1374,6 +1397,12 @@ msgstr ""
 msgid "Password"
 msgstr ""
 
+msgid "Unused Expanders Detected"
+msgstr ""
+
+msgid "Click here to enable all connected stations."
+msgstr ""
+
 msgid "Unified firmware is now avaialble"
 msgstr ""
 
@@ -1410,10 +1439,10 @@ msgstr ""
 msgid "View Changelog"
 msgstr ""
 
-msgid "Update Now"
+msgid "Update Guide"
 msgstr ""
 
-msgid "Update Guide"
+msgid "Update Now"
 msgstr ""
 
 msgid "Dismiss"
@@ -1572,6 +1601,9 @@ msgstr ""
 msgid "German"
 msgstr ""
 
+msgid "Bulgarian"
+msgstr ""
+
 msgid "Greek"
 msgstr ""
 
@@ -1605,6 +1637,9 @@ msgstr ""
 msgid "Russian"
 msgstr ""
 
+msgid "Tamil"
+msgstr ""
+
 msgid "Slovak"
 msgstr ""
 
@@ -1615,6 +1650,15 @@ msgid "Spanish"
 msgstr ""
 
 msgid "Thai"
+msgstr ""
+
+msgid "Turkish"
+msgstr ""
+
+msgid "Swedish"
+msgstr ""
+
+msgid "Romanian"
 msgstr ""
 
 msgid "Localization"
@@ -1641,5 +1685,5 @@ msgstr ""
 msgid "Downgrade UI"
 msgstr ""
 
-msgid "Weather Diagnostics"
+msgid "System Diagnostics"
 msgstr ""
